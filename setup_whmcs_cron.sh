@@ -169,7 +169,7 @@ manage_cron_jobs() {
             6)
                 read -p "Are you sure you want to purge all script-added cron jobs? (yes/no): " confirm_purge
                 if [ "$confirm_purge" == "yes" ]; then
-                    crontab -l -u $user 2>/dev/null | grep -v "# whmcs_" > /tmp/crontab-$user
+                    crontab -l -u $user 2>/dev/null | grep -v "# whmcs_" | grep -v "/opt/whmcs_cron_monitor/whmcs_cron_monitor.sh" > /tmp/crontab-$user
                     crontab -u $user /tmp/crontab-$user
                     rm /tmp/crontab-$user
                     read -p "Do you want to remove monitoring script and directory? (yes/no): " confirm_remove
