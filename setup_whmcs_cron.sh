@@ -39,7 +39,7 @@ SERVER_IP=\$(hostname -I | awk '{print \$1}')
 # Function to send notification via Telegram and Slack
 send_notification() {
     MESSAGE=\$1
-    if [ -n "\$TELEGRAM_BOT_TOKEN" ] && [ -n "\$TELEGRAM_CHAT_ID" ]; then
+    if [ -n "\$TELEGRAM_BOT_TOKEN" ] && [ -n "\$TEGRAM_CHAT_ID" ]; then
         curl -s -X POST https://api.telegram.org/bot\$TELEGRAM_BOT_TOKEN/sendMessage -d chat_id=\$TELEGRAM_CHAT_ID -d text="\$MESSAGE"
     fi
     if [ -n "\$SLACK_WEBHOOK_URL" ]; then
@@ -197,12 +197,24 @@ manage_cron_jobs() {
 initial_setup() {
     echo "Performing initial setup..."
     
-    # Get user confirmation for enabling/disabling specific cron jobs
+    # Get user confirmation for enabling/disabling all specific cron jobs
+    enable_main_cron=$(get_confirmation "Enable Main System cron job?" "yes")
+    enable_ticket_escalations=$(get_confirmation "Enable Ticket Escalations cron job?" "yes")
+    enable_auto_suspensions=$(get_confirmation "Enable Auto Suspensions cron job?" "yes")
     enable_email_campaigns=$(get_confirmation "Enable Process Email Campaigns cron job?" "no")
     enable_email_queue=$(get_confirmation "Enable Process Email Queue cron job?" "no")
     enable_domain_status_sync=$(get_confirmation "Enable Domain Status Synchronisation cron job?" "no")
     enable_domain_sync_report=$(get_confirmation "Enable Domain Synchronisation Cron Report job?" "no")
+    enable_server_meta_data=$(get_confirmation "Enable Server Remote Meta Data cron job?" "yes")
+    enable_database_backup=$(get_confirmation "Enable Database Backup cron job?" "yes")
+    enable_overage_billing=$(get_confirmation "Enable Overage Billing cron job?" "yes")
+    enable_affiliate_reports=$(get_confirmation "Enable Affiliate Reports cron job?" "yes")
+    enable_credit_card_payments=$(get_confirmation "Enable Process Credit Card Payments cron job?" "yes")
     enable_prune_ticket_attachments=$(get_confirmation "Enable Prune Ticket Attachments cron job?" "no")
+    enable_currency_update=$(get_confirmation "Enable Currency Exchange Rates Update cron job?" "yes")
+    enable_invoice_reminders=$(get_confirmation "Enable Invoice Reminders cron job?" "yes")
+    enable_domain_renewal_notices=$(get_confirmation "Enable Domain Renewal Notices cron job?" "yes")
+    enable_fixed_term_terminations=$(get_confirmation "Enable Fixed Term Terminations cron job?" "yes")
 
     # Define the cron jobs with conditional enabling/disabling
 
@@ -297,41 +309,24 @@ initial_setup() {
     fixed_term_terminations_job="0 8 * * * $php_path -q $cron_dir/cron.php do --FixedTermTerminations -vvv --email-report=1"
     fixed_term_terminations_name="whmcs_fixed_term_terminations"
 
-    # Create or update cron jobs
-    create_or_update_cron_job "$user" "$main_cron_job" "$main_cron_name"
-    create_or_update_cron_job "$user" "$ticket_escalations_job" "$ticket_escalations_name"
-    create_or_update_cron_job "$user" "$auto_suspensions_job" "$auto_suspensions_name"
-    create_or_update_cron_job "$user" "$whmcs_update_job" "$whmcs_update_name"
-    create_or_update_cron_job "$user" "$server_meta_data_job" "$server_meta_data_name"
-    create_or_update_cron_job "$user" "$database_backup_job" "$database_backup_name"
-    create_or_update_cron_job "$user" "$overage_billing_job" "$overage_billing_name"
-    create_or_update_cron_job "$user" "$affiliate_reports_job" "$affiliate_reports_name"
-    create_or_update_cron_job "$user" "$credit_card_payments_job" "$credit_card_payments_name"
-    create_or_update_cron_job "$user" "$currency_update_job" "$currency_update_name"
-    create_or_update_cron_job "$user" "$invoice_reminders_job" "$invoice_reminders_name"
-    create_or_update_cron_job "$user" "$domain_renewal_notices_job" "$domain_renewal_notices_name"
-    create_or_update_cron_job "$user" "$fixed_term_terminations_job" "$fixed_term_terminations_name"
-
     # Conditionally create or update specific cron jobs
-    if [[ $enable_email_campaigns == "yes" ]]; then
-        create_or_update_cron_job "$user" "$email_campaigns_job" "$email_campaigns_name"
-    fi
-
-    if [[ $enable_email_queue == "yes" ]]; then
-        create_or_update_cron_job "$user" "$process_email_queue_job" "$process_email_queue_name"
-    fi
-
-    if [[ $enable_domain_status_sync == "yes" ]]; then
-        create_or_update_cron_job "$user" "$domain_status_sync_job" "$domain_status_sync_name"
-    fi
-
-    if [[ $enable_domain_sync_report == "yes" ]]; then
-        create_or_update_cron_job "$user" "$domain_sync_report_job" "$domain_sync_report_name"
-    fi
-
-    if [[ $enable_prune_ticket_attachments == "yes" ]]; then
-        create_or_update_cron_job "$user" "$prune_ticket_attachments_job" "$prune_ticket_attachments_name"
-    fi
+    [[ $enable_main_cron == "yes" ]] && create_or_update_cron_job "$user" "$main_cron_job" "$main_cron_name"
+    [[ $enable_ticket_escalations == "yes" ]] && create_or_update_cron_job "$user" "$ticket_escalations_job" "$ticket_escalations_name"
+    [[ $enable_auto_suspensions == "yes" ]] && create_or_update_cron_job "$user" "$auto_suspensions_job" "$auto_suspensions_name"
+    [[ $enable_email_campaigns == "yes" ]] && create_or_update_cron_job "$user" "$email_campaigns_job" "$email_campaigns_name"
+    [[ $enable_email_queue == "yes" ]] && create_or_update_cron_job "$user" "$process_email_queue_job" "$process_email_queue_name"
+    [[ $enable_domain_status_sync == "yes" ]] && create_or_update_cron_job "$user" "$domain_status_sync_job" "$domain_status_sync_name"
+    [[ $enable_domain_sync_report == "yes" ]] && create_or_update_cron_job "$user" "$domain_sync_report_job" "$domain_sync_report_name"
+    [[ $enable_server_meta_data == "yes" ]] && create_or_update_cron_job "$user" "$server_meta_data_job" "$server_meta_data_name"
+    [[ $enable_database_backup == "yes" ]] && create_or_update_cron_job "$user" "$database_backup_job" "$database_backup_name"
+    [[ $enable_overage_billing == "yes" ]] && create_or_update_cron_job "$user" "$overage_billing_job" "$overage_billing_name"
+    [[ $enable_affiliate_reports == "yes" ]] && create_or_update_cron_job "$user" "$affiliate_reports_job" "$affiliate_reports_name"
+    [[ $enable_credit_card_payments == "yes" ]] && create_or_update_cron_job "$user" "$credit_card_payments_job" "$credit_card_payments_name"
+    [[ $enable_prune_ticket_attachments == "yes" ]] && create_or_update_cron_job "$user" "$prune_ticket_attachments_job" "$prune_ticket_attachments_name"
+    [[ $enable_currency_update == "yes" ]] && create_or_update_cron_job "$user" "$currency_update_job" "$currency_update_name"
+    [[ $enable_invoice_reminders == "yes" ]] && create_or_update_cron_job "$user" "$invoice_reminders_job" "$invoice_reminders_name"
+    [[ $enable_domain_renewal_notices == "yes" ]] && create_or_update_cron_job "$user" "$domain_renewal_notices_job" "$domain_renewal_notices_name"
+    [[ $enable_fixed_term_terminations == "yes" ]] && create_or_update_cron_job "$user" "$fixed_term_terminations_job" "$fixed_term_terminations_name"
 }
 
 # Check if the script has been run before
