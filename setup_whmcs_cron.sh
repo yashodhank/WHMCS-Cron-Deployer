@@ -36,7 +36,11 @@ create_cron_job() {
 
 # Function to set up monitoring and notification
 setup_monitoring() {
-    local monitoring_script_path="/path/to/monitor_cron.sh"
+    local monitoring_script_path="/opt/whmcs_cron_monitor/whmcs_cron_monitor.sh"
+    
+    # Create directory if it does not exist
+    sudo mkdir -p /opt/whmcs_cron_monitor
+
     cat <<EOF > $monitoring_script_path
 #!/bin/bash
 
@@ -85,7 +89,7 @@ fi
 EOF
 
     # Make the monitoring script executable
-    chmod +x $monitoring_script_path
+    sudo chmod +x $monitoring_script_path
 
     # Add the monitoring script to cron to run every 5 minutes
     echo "*/5 * * * * $monitoring_script_path" | sudo tee -a /var/spool/cron/crontabs/$user > /dev/null
