@@ -12,37 +12,10 @@ create_or_update_cron_job() {
     local cron_job=$2
     local cron_name=$3
 
-    case $control_panel in
-        Plesk|cPanel)
-            (crontab -l -u $user 2>/dev/null; echo "$cron_job # $cron_name") | crontab -u $user -
-            ;;
-        FastPanel)
-            sudo su - $user -c "(crontab -l 2>/dev/null; echo \"$cron_job # $cron_name\") | crontab -"
-            ;;
-        *)
-            echo "Unsupported control panel: $control_panel"
-            exit 1
-            ;;
-    esac
-}
-
-# Function to remove old cron jobs based on the job name
-remove_old_cron_jobs() {
-    local user=$1
-    local cron_name=$2
-
-    case $control_panel in
-        Plesk|cPanel)
-            (crontab -l -u $user 2>/dev/null | grep -v "# $cron_name") | crontab -u $user -
-            ;;
-        FastPanel)
-            sudo su - $user -c "(crontab -l 2>/dev/null | grep -v '# $cron_name') | crontab -"
-            ;;
-        *)
-            echo "Unsupported control panel: $control_panel"
-            exit 1
-            ;;
-    esac
+    crontab -l -u $user 2>/dev/null | grep -v "# $cron_name" > /tmp/crontab-$user
+    echo "$cron_job # $cron_name" >> /tmp/crontab-$user
+    crontab -u $user /tmp/crontab-$user
+    rm /tmp/crontab-$user
 }
 
 # Function to set up monitoring and notification
@@ -102,8 +75,10 @@ EOF
     # Make the monitoring script executable
     sudo chmod +x $monitoring_script_path
 
-    # Add the monitoring script to cron to run every 5 minutes
-    sudo su - $user -c "(crontab -l 2>/dev/null; echo \"*/5 * * * * $monitoring_script_path\") | crontab -"
+    # Add the monitoring script to cron to run every 5 minutes, ensuring it's not added multiple times
+    if ! crontab -l -u $user 2>/dev/null | grep -q "$monitoring_script_path"; then
+        (crontab -l -u $user 2>/dev/null; echo "*/5 * * * * $monitoring_script_path") | crontab -u $user -
+    fi
 }
 
 # Get user input or arguments
@@ -139,7 +114,9 @@ manage_cron_jobs() {
     echo "2. Add New Cron Job"
     echo "3. Update Existing Cron Job"
     echo "4. Delete Cron Job"
-    echo "5. Exit"
+    echo "5. List All Cron Jobs"
+    echo "6. Purge All Script-Added Cron Jobs"
+    echo "7. Exit"
 
     while true; do
         read -p "Choose an option: " option
@@ -153,9 +130,9 @@ manage_cron_jobs() {
                     echo "Current Status: $current_status"
                     new_status=$(get_confirmation "Enable or Disable (enable/disable): " "disable")
                     if [ "$new_status" == "enable" ]; then
-                        sed -i "/# $cron_name/s/^#//" /tmp/crontab-$user
+                        crontab -l -u $user 2>/dev/null | sed "/# $cron_name/s/^#//" > /tmp/crontab-$user
                     else
-                        sed -i "/# $cron_name/s/^/#/" /tmp/crontab-$user
+                        crontab -l -u $user 2>/dev/null | sed "/# $cron_name/s/^/#/" > /tmp/crontab-$user
                     fi
                     crontab -u $user /tmp/crontab-$user
                     rm /tmp/crontab-$user
@@ -174,15 +151,38 @@ manage_cron_jobs() {
                 else
                     echo "Current Job: $current_job"
                     read -p "Enter the new cron job command: " cron_job
-                    remove_old_cron_jobs "$user" "$cron_name"
                     create_or_update_cron_job "$user" "$cron_job" "$cron_name"
                 fi
                 ;;
             4)
+                echo "Available cron jobs:"
+                crontab -l -u $user 2>/dev/null | grep "#"
                 read -p "Enter the cron job name to delete: " cron_name
-                remove_old_cron_jobs "$user" "$cron_name"
+                crontab -l -u $user 2>/dev/null | grep -v "# $cron_name" > /tmp/crontab-$user
+                crontab -u $user /tmp/crontab-$user
+                rm /tmp/crontab-$user
                 ;;
             5)
+                echo "Current cron jobs:"
+                crontab -l -u $user 2>/dev/null
+                ;;
+            6)
+                read -p "Are you sure you want to purge all script-added cron jobs? (yes/no): " confirm_purge
+                if [ "$confirm_purge" == "yes" ]; then
+                    crontab -l -u $user 2>/dev/null | grep -v "# whmcs_" > /tmp/crontab-$user
+                    crontab -u $user /tmp/crontab-$user
+                    rm /tmp/crontab-$user
+                    read -p "Do you want to remove monitoring script and directory? (yes/no): " confirm_remove
+                    if [ "$confirm_remove" == "yes" ]; then
+                        sudo rm -rf /opt/whmcs_cron_monitor
+                        echo "Monitoring script and directory removed."
+                    fi
+                    echo "All script-added cron jobs have been purged."
+                else
+                    echo "Purge cancelled."
+                fi
+                ;;
+            7)
                 echo "Exiting..."
                 break
                 ;;
