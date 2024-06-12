@@ -123,7 +123,23 @@ if [ -z "$cron_dir" ] || [ -z "$php_path" ] || [ -z "$user" ] || [ -z "$control_
     exit 1
 fi
 
-# Define the cron jobs
+# Function to get user confirmation for enabling/disabling cron jobs
+get_confirmation() {
+    local message=$1
+    local default=$2
+    read -p "$message [${default}]: " confirmation
+    confirmation=${confirmation:-$default}
+    echo $confirmation
+}
+
+# Get user confirmation for enabling/disabling specific cron jobs
+enable_email_campaigns=$(get_confirmation "Enable Process Email Campaigns cron job?" "no")
+enable_email_queue=$(get_confirmation "Enable Process Email Queue cron job?" "no")
+enable_domain_status_sync=$(get_confirmation "Enable Domain Status Synchronisation cron job?" "no")
+enable_domain_sync_report=$(get_confirmation "Enable Domain Synchronisation Cron Report job?" "no")
+enable_prune_ticket_attachments=$(get_confirmation "Enable Prune Ticket Attachments cron job?" "no")
+
+# Define the cron jobs with conditional enabling/disabling
 
 # Main system cron job: Runs every 5 minutes. This job excludes Ticket Escalations, Auto Suspensions, Email Campaigns,
 # and Process Email Queue tasks to be run separately. It ensures regular execution of WHMCS automation tasks.
@@ -160,6 +176,10 @@ whmcs_update_name="whmcs_software_updates"
 domain_status_sync_job="0 * * * * $php_path -q $cron_dir/cron.php do --DomainStatusSync -vvv --email-report=1"
 domain_status_sync_name="whmcs_domain_status_sync"
 
+# Domain Synchronisation Cron Report: Runs twice daily. This job generates a report on domain synchronisation activities.
+domain_sync_report_job="0 0,12 * * * $php_path -q $cron_dir/cron.php do --DomainSynchronisationCronReport -vvv --email-report=1"
+domain_sync_report_name="whmcs_domain_sync_report"
+
 # Server Remote Meta Data: Runs hourly. This job updates the server metadata, which helps in maintaining accurate
 # information about server usage and status.
 server_meta_data_job="0 * * * * $php_path -q $cron_dir/cron.php do --ServerRemoteMetaData -vvv --email-report=1"
@@ -185,9 +205,9 @@ affiliate_reports_name="whmcs_affiliate_reports"
 credit_card_payments_job="0 5 * * * $php_path -q $cron_dir/cron.php do --ProcessCreditCardPayments -vvv --email-report=1"
 credit_card_payments_name="whmcs_credit_card_payments"
 
-# Auto Prune Ticket Attachments: Runs hourly. This job removes inactive ticket attachments in batches of 1000, helping
+# Auto Prune Ticket Attachments: Runs once a week. This job removes inactive ticket attachments in batches of 1000, helping
 # to manage disk space and keep the system clean.
-prune_ticket_attachments_job="0 * * * * $php_path -q $cron_dir/cron.php do --AutoPruneTicketAttachments -vvv --email-report=1"
+prune_ticket_attachments_job="0 3 * * 0 $php_path -q $cron_dir/cron.php do --AutoPruneTicketAttachments -vvv --email-report=1"
 prune_ticket_attachments_name="whmcs_prune_ticket_attachments"
 
 # Additional Cron Jobs for better control:
@@ -226,6 +246,7 @@ manage_cron_jobs() {
     remove_old_cron_jobs $user "whmcs_email_campaigns"
     remove_old_cron_jobs $user "whmcs_software_updates"
     remove_old_cron_jobs $user "whmcs_domain_status_sync"
+    remove_old_cron_jobs $user "whmcs_domain_sync_report"
     remove_old_cron_jobs $user "whmcs_server_meta_data"
     remove_old_cron_jobs $user "whmcs_database_backup"
     remove_old_cron_jobs $user "whmcs_overage_billing"
@@ -241,20 +262,39 @@ manage_cron_jobs() {
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$main_cron_job" "$main_cron_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$ticket_escalations_job" "$ticket_escalations_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$auto_suspensions_job" "$auto_suspensions_name"
-    create_or_update_cron_job "$cron_path" "$php_path" "$user" "$process_email_queue_job" "$process_email_queue_name"
-    create_or_update_cron_job "$cron_path" "$php_path" "$user" "$email_campaigns_job" "$email_campaigns_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$whmcs_update_job" "$whmcs_update_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$domain_status_sync_job" "$domain_status_sync_name"
+    create_or_update_cron_job "$cron_path" "$php_path" "$user" "$domain_sync_report_job" "$domain_sync_report_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$server_meta_data_job" "$server_meta_data_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$database_backup_job" "$database_backup_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$overage_billing_job" "$overage_billing_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$affiliate_reports_job" "$affiliate_reports_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$credit_card_payments_job" "$credit_card_payments_name"
-    create_or_update_cron_job "$cron_path" "$php_path" "$user" "$prune_ticket_attachments_job" "$prune_ticket_attachments_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$currency_update_job" "$currency_update_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$invoice_reminders_job" "$invoice_reminders_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$domain_renewal_notices_job" "$domain_renewal_notices_name"
     create_or_update_cron_job "$cron_path" "$php_path" "$user" "$fixed_term_terminations_job" "$fixed_term_terminations_name"
+
+    # Conditionally create or update specific cron jobs
+    if [[ $enable_email_campaigns == "yes" ]]; then
+        create_or_update_cron_job "$cron_path" "$php_path" "$user" "$email_campaigns_job" "$email_campaigns_name"
+    fi
+
+    if [[ $enable_email_queue == "yes" ]]; then
+        create_or_update_cron_job "$cron_path" "$php_path" "$user" "$process_email_queue_job" "$process_email_queue_name"
+    fi
+
+    if [[ $enable_domain_status_sync == "yes" ]]; then
+        create_or_update_cron_job "$cron_path" "$php_path" "$user" "$domain_status_sync_job" "$domain_status_sync_name"
+    fi
+
+    if [[ $enable_domain_sync_report == "yes" ]]; then
+        create_or_update_cron_job "$cron_path" "$php_path" "$user" "$domain_sync_report_job" "$domain_sync_report_name"
+    fi
+
+    if [[ $enable_prune_ticket_attachments == "yes" ]]; then
+        create_or_update_cron_job "$cron_path" "$php_path" "$user" "$prune_ticket_attachments_job" "$prune_ticket_attachments_name"
+    fi
 }
 
 # Set up monitoring and notification
